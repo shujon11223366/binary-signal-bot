@@ -3,49 +3,31 @@ from datetime import datetime
 import pandas as pd
 import numpy as np
 import requests
-import time
 
 app = Flask(__name__)
 
-# === Get candles from TradingView (used by Pocket Option) ===
-def get_latest_candles(pair="EURUSD", timeframe="1", limit=50):
-    pair = pair.upper().replace("/", "")
-    symbol = f"FX:{pair}" if "OTC" not in pair else f"PO:{pair.replace('OTC', '')}"
+API_KEY = "0a25bcb593e047b2aded75b1db91b130"
 
-    resolution = {
-        "30s": "0.5",
-        "1m": "1",
-        "5m": "5",
-        "15m": "15",
-        "30m": "30",
-        "1h": "60",
-        "4h": "240"
-    }.get(timeframe, "1")
-
-    url = "https://scanner.tradingview.com/america/scan"
-    payload = {
-        "symbols": {"tickers": [symbol], "query": {"types": []}},
-        "columns": ["close", f"high", f"low", f"open"]
+# === Get candles from TwelveData ===
+def get_latest_candles(pair="EURUSD", timeframe="1min", limit=50):
+    url = f"https://api.twelvedata.com/time_series"
+    params = {
+        "symbol": pair.upper(),
+        "interval": timeframe,
+        "outputsize": limit,
+        "apikey": API_KEY
     }
-
-    candles_url = f"https://tvc4.forexpros.com/{int(time.time())}/4/1/8/history?symbol={symbol}&resolution={resolution}&from={int(time.time()) - 60 * 100}&to={int(time.time())}"
-
-    r = requests.get(candles_url)
-    if r.status_code != 200:
-        raise Exception("Failed to fetch candles")
+    r = requests.get(url, params=params)
     data = r.json()
 
-    if "c" not in data:
-        raise Exception("No candle data")
+    if "values" not in data:
+        raise Exception(f"TwelveData Error: {data.get('message', 'No data')}")
 
-    df = pd.DataFrame({
-        "open": data["o"],
-        "high": data["h"],
-        "low": data["l"],
-        "close": data["c"]
-    })
-
-    return df.tail(limit)
+    df = pd.DataFrame(data["values"])
+    df = df.rename(columns={"open": "open", "high": "high", "low": "low", "close": "close"})
+    df = df.astype(float)
+    df = df[::-1]  # reverse to chronological order
+    return df.reset_index(drop=True)
 
 # === RSI ===
 def compute_rsi(series, period=14):
@@ -57,7 +39,7 @@ def compute_rsi(series, period=14):
     rs = ma_up / ma_down
     return 100 - (100 / (1 + rs))
 
-# === Indicator Analysis ===
+# === Indicator Logic ===
 def analyze_signals(df):
     df['ema_fast'] = df['close'].ewm(span=5).mean()
     df['ema_slow'] = df['close'].ewm(span=10).mean()
@@ -106,7 +88,17 @@ def analyze_signals(df):
 @app.route("/get-signal")
 def get_signal():
     pair = request.args.get("pair", "EURUSD")
-    timeframe = request.args.get("timeframe", "1m")
+    tf = request.args.get("timeframe", "1m")
+    tf_map = {
+        "30s": "1min",
+        "1m": "1min",
+        "5m": "5min",
+        "15m": "15min",
+        "30m": "30min",
+        "1h": "1h",
+        "4h": "4h"
+    }
+    timeframe = tf_map.get(tf, "1min")
 
     now = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
     try:
@@ -117,7 +109,7 @@ def get_signal():
             "pair": pair.upper().replace("_", "/"),
             "action": signal,
             "entry_price": f"${round(close_price, 5)}",
-            "expiration": timeframe,
+            "expiration": tf,
             "confidence": f"{confidence}%",
             "risk_level": "LOW" if confidence >= 85 else "MEDIUM" if confidence >= 70 else "HIGH",
             "analysis": ", ".join(reasons),
