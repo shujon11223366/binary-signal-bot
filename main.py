@@ -4,7 +4,7 @@ import random
 
 app = Flask(__name__)
 
-# Simulated signal logic — replace with real scraper/logic later
+# Simulated real-time signal logic (can be replaced with live market data)
 def get_fake_signal(pair, timeframe):
     action = random.choice(["BUY", "SELL"])
     confidence = random.randint(75, 95)
@@ -30,5 +30,6 @@ def get_signal():
     signal = get_fake_signal(pair, timeframe)
     return jsonify(signal)
 
+# 🚨 IMPORTANT: Use port 8080 for Railway hosting
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+    app.run(host="0.0.0.0", port=8080)
