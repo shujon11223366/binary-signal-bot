@@ -12,7 +12,7 @@ API_KEY = "0a25bcb593e047b2aded75b1db91b130"
 def get_latest_candles(pair="EUR/USD", timeframe="1min", limit=50):
     url = f"https://api.twelvedata.com/time_series"
     params = {
-        "symbol": pair.upper().replace("_", "/"),  # 🔥 FIXED SYMBOL FORMAT
+        "symbol": pair.upper().replace("_", "/"),
         "interval": timeframe,
         "outputsize": limit,
         "apikey": API_KEY
@@ -25,8 +25,12 @@ def get_latest_candles(pair="EUR/USD", timeframe="1min", limit=50):
 
     df = pd.DataFrame(data["values"])
     df = df.rename(columns={"open": "open", "high": "high", "low": "low", "close": "close"})
-    df = df.astype(float)
-    df = df[::-1]  # reverse to chronological order
+
+    # Convert only OHLC columns to float
+    for col in ["open", "high", "low", "close"]:
+        df[col] = df[col].astype(float)
+
+    df = df[::-1]  # Reverse to chronological order
     return df.reset_index(drop=True)
 
 # === RSI Calculation ===
@@ -39,7 +43,7 @@ def compute_rsi(series, period=14):
     rs = ma_up / ma_down
     return 100 - (100 / (1 + rs))
 
-# === Analyze signal with EMA, RSI, MACD ===
+# === Signal Logic ===
 def analyze_signals(df):
     df['ema_fast'] = df['close'].ewm(span=5).mean()
     df['ema_slow'] = df['close'].ewm(span=10).mean()
@@ -84,13 +88,13 @@ def analyze_signals(df):
 
     return signal, confidence, reason, last['close']
 
-# === Signal API Endpoint ===
+# === API Endpoint ===
 @app.route("/get-signal")
 def get_signal():
     pair = request.args.get("pair", "EUR/USD").replace("_", "/")
     tf = request.args.get("timeframe", "1m")
     tf_map = {
-        "30s": "1min",  # 30s not supported by TwelveData
+        "30s": "1min",
         "1m": "1min",
         "5m": "5min",
         "15m": "15min",
@@ -119,6 +123,6 @@ def get_signal():
     except Exception as e:
         return jsonify({"error": str(e)})
 
-# === Run Flask app ===
+# === Run the server ===
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8080)
