@@ -1,4 +1,1 @@
-python-telegram-bot==13.7
-requests
-beautifulsoup4
-pandas
+Flask==2.3.3
