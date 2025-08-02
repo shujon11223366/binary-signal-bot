@@ -1,24 +1,34 @@
-import os
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Updater, CommandHandler, CallbackContext
+from flask import Flask, request, jsonify
+from datetime import datetime
+import random
 
-TOKEN = os.getenv("BOT_TOKEN")
+app = Flask(__name__)
 
-def start(update: Update, context: CallbackContext):
-    buttons = [
-        [InlineKeyboardButton("1m", callback_data="1m"),
-         InlineKeyboardButton("5m", callback_data="5m")]
-    ]
-    update.message.reply_text(
-        "⏳ Select Timeframe:",
-        reply_markup=InlineKeyboardMarkup(buttons)
-    )
+# Simulated signal logic — replace with real scraper/logic later
+def get_fake_signal(pair, timeframe):
+    action = random.choice(["BUY", "SELL"])
+    confidence = random.randint(75, 95)
+    risk = "LOW" if confidence > 85 else "MEDIUM"
+    entry_price = round(random.uniform(0.8, 1.5), 5)
+    now = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
+    
+    return {
+        "pair": pair.replace("_", "/").upper(),
+        "action": action,
+        "entry_price": f"${entry_price}",
+        "expiration": timeframe,
+        "confidence": f"{confidence}%",
+        "risk_level": risk,
+        "analysis": f"Simulated analysis for {pair} on {timeframe}",
+        "timestamp": now
+    }
 
-def main():
-    updater = Updater(TOKEN)
-    updater.dispatcher.add_handler(CommandHandler('start', start))
-    updater.start_polling()
-    updater.idle()
+@app.route("/get-signal")
+def get_signal():
+    pair = request.args.get("pair", "EURUSD")
+    timeframe = request.args.get("timeframe", "1m")
+    signal = get_fake_signal(pair, timeframe)
+    return jsonify(signal)
 
-if __name__ == '__main__':
-    main()
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5000)
