@@ -8,11 +8,11 @@ app = Flask(__name__)
 
 API_KEY = "0a25bcb593e047b2aded75b1db91b130"
 
-# === Get candles from TwelveData ===
-def get_latest_candles(pair="EURUSD", timeframe="1min", limit=50):
+# === Fetch real-time candles from TwelveData ===
+def get_latest_candles(pair="EUR/USD", timeframe="1min", limit=50):
     url = f"https://api.twelvedata.com/time_series"
     params = {
-        "symbol": pair.upper(),
+        "symbol": pair.upper().replace("_", "/"),  # 🔥 FIXED SYMBOL FORMAT
         "interval": timeframe,
         "outputsize": limit,
         "apikey": API_KEY
@@ -29,7 +29,7 @@ def get_latest_candles(pair="EURUSD", timeframe="1min", limit=50):
     df = df[::-1]  # reverse to chronological order
     return df.reset_index(drop=True)
 
-# === RSI ===
+# === RSI Calculation ===
 def compute_rsi(series, period=14):
     delta = series.diff()
     up = delta.clip(lower=0)
@@ -39,7 +39,7 @@ def compute_rsi(series, period=14):
     rs = ma_up / ma_down
     return 100 - (100 / (1 + rs))
 
-# === Indicator Logic ===
+# === Analyze signal with EMA, RSI, MACD ===
 def analyze_signals(df):
     df['ema_fast'] = df['close'].ewm(span=5).mean()
     df['ema_slow'] = df['close'].ewm(span=10).mean()
@@ -84,13 +84,13 @@ def analyze_signals(df):
 
     return signal, confidence, reason, last['close']
 
-# === API Endpoint ===
+# === Signal API Endpoint ===
 @app.route("/get-signal")
 def get_signal():
-    pair = request.args.get("pair", "EURUSD")
+    pair = request.args.get("pair", "EUR/USD").replace("_", "/")
     tf = request.args.get("timeframe", "1m")
     tf_map = {
-        "30s": "1min",
+        "30s": "1min",  # 30s not supported by TwelveData
         "1m": "1min",
         "5m": "5min",
         "15m": "15min",
@@ -106,7 +106,7 @@ def get_signal():
         signal, confidence, reasons, close_price = analyze_signals(candles)
 
         return jsonify({
-            "pair": pair.upper().replace("_", "/"),
+            "pair": pair.upper(),
             "action": signal,
             "entry_price": f"${round(close_price, 5)}",
             "expiration": tf,
@@ -119,6 +119,6 @@ def get_signal():
     except Exception as e:
         return jsonify({"error": str(e)})
 
-# === Run App ===
+# === Run Flask app ===
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8080)
