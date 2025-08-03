@@ -8,8 +8,8 @@ from telegram.ext import (
 # === Your Telegram Bot Token ===
 BOT_TOKEN = "7925099120:AAEQ8njhIlRzy1hzD04PmjjK95_WsQ8Krp4"
 
-# === Your Live Flask API Endpoint ===
-API_BASE = "https://web-production-187f2.up.railway.app"
+# === Your NEW API Endpoint ===
+API_BASE = "https://web-production-f901.up.railway.app"
 
 # === Timeframes & Pairs ===
 timeframes = ["30s", "1m", "5m", "15m", "30m", "1h", "4h"]
@@ -21,7 +21,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 [InlineKeyboardButton(tf, callback_data=f"tf:{tf}") for tf in timeframes[3:]]]
     await update.message.reply_text("🕐 Choose a timeframe:", reply_markup=InlineKeyboardMarkup(keyboard))
 
-# === Handle Timeframe Selection ===
+# === Timeframe Selection ===
 async def handle_timeframe(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -30,16 +30,21 @@ async def handle_timeframe(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [[InlineKeyboardButton(p, callback_data=f"pair:{p}") for p in pairs[i:i+2]] for i in range(0, len(pairs), 2)]
     await query.edit_message_text(f"✅ Timeframe: {tf}\n\n💱 Choose a trading pair:", reply_markup=InlineKeyboardMarkup(keyboard))
 
-# === Handle Pair Selection ===
+# === Pair Selection ===
 async def handle_pair(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     pair = query.data.split(":")[1]
     tf = context.user_data.get("timeframe", "1m")
-    res = requests.get(f"{API_BASE}/get-signal?pair={pair}&timeframe={tf}").json()
+
+    try:
+        res = requests.get(f"{API_BASE}/get-signal?pair={pair}&timeframe={tf}").json()
+    except Exception as e:
+        await query.edit_message_text(f"⚠ Error fetching signal: {str(e)}")
+        return
 
     if "error" in res:
-        await query.edit_message_text(f"❌ Error: {res['error']}")
+        await query.edit_message_text(f"❌ API Error: {res['error']}")
         return
 
     icon = "🟢" if res['action'] == "BUY" else "🔴"
@@ -57,12 +62,12 @@ async def handle_pair(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [[InlineKeyboardButton("🔄 Get Another Signal", callback_data="restart")]]
     await query.edit_message_text(msg, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(keyboard))
 
-# === Restart ===
+# === Restart Selection ===
 async def restart(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await start(update, context)
 
-# === Launch Bot ===
-async def main():
+# === RUN BOT ===
+if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     app = ApplicationBuilder().token(BOT_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
@@ -70,9 +75,4 @@ async def main():
     app.add_handler(CallbackQueryHandler(handle_pair, pattern="^pair:"))
     app.add_handler(CallbackQueryHandler(restart, pattern="^restart$"))
     print("🤖 Bot is running...")
-    await app.run_polling()
-
-# === Run it ===
-if __name__ == "__main__":
-    import asyncio
-    asyncio.run(main())
+    app.run_polling()
